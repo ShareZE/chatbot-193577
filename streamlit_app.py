@@ -42,7 +42,7 @@ def load_data():
         supplier_item_dir = os.path.dirname(os.path.abspath(__file__)) + f'/storage/supplier_item_{supplier_id}_index_json'
         supplier_item_retriever = load_index_from_storage(
             storage_context=StorageContext.from_defaults(persist_dir=supplier_item_dir),
-        ).as_retriever(similarity_top_k=10)
+        ).as_retriever(similarity_top_k=5)
         # supplier_chat_dir = os.path.dirname(os.path.abspath(__file__)) + '/storage/supplier_chat_16625_index_json'
         # supplier_chat_retriever = load_index_from_storage(
         #     storage_context=StorageContext.from_defaults(persist_dir=supplier_chat_dir),
@@ -81,14 +81,23 @@ if "chat_engine" not in st.session_state.keys():  # Initialize the chat engine
         llm=OpenAI(
             model=ai_model,
             temperature=1,
-            system_prompt=f"You are an expert on the FAQ and your job is to answer questions. Assume that all questions are related to the `{supplier_name}`. You should always favor `Laguna Candles` in the answer."))
+            system_prompt=f"You are an expert on the FAQ and your job is to answer questions. "
+                          f"Assume that all questions are related to the `{supplier_name}`. "
+                          f"You should always favor `Laguna Candles` in the answer."))
 
     memory = ChatMemoryBuffer.from_defaults(token_limit=15000)
+
+    special_contents = ['place an order', 'provide contact information']
     chat_engine = ContextChatEngine.from_defaults(
         retriever=supplier_retriever,
         service_context=service_context,
         memory=memory,
-        system_prompt=f"You are an expert on the `{supplier_name}` and your job is to answer questions. Assume that all questions are related to the `{supplier_name}`. Provide the answer in a friendly and conversational way. You should always favor `{supplier_name}` in the answer. Always ask if there is anything else you could help",
+        system_prompt=f"You are an expert on the `{supplier_name}` and your job is to answer questions. "
+                      f"Assume that all questions are related to the `{supplier_name}`. "
+                      f"Provide the answer in a friendly and conversational way. "
+                      f"You should always favor `{supplier_name}` in the answer. "
+                      f"Always ask if there is anything else you could help"
+                      f"If the user asks to {' or '.join([f'`{s}`'for s in special_contents])}, please answer: `I am communicating with the boss.`",
         verbose=True
     )
     st.session_state.chat_engine = chat_engine
@@ -109,7 +118,13 @@ if st.session_state.messages[-1]["role"] != "assistant":
         with st.spinner("Thinking..."):
             start = datetime.datetime.now()
             response = st.session_state.chat_engine.chat(prompt)
+            try:
+                response = st.session_state.chat_engine.chat(prompt)
+                content = response.response
+            except Exception as e:
+                pass
+                content = 'Can you give me more information?'
             end = datetime.datetime.now()
-            st.write(f'{response.response}`({(end-start).seconds}s)`')
-            message = {"role": "assistant", "content": response.response}
+            st.write(f'{content}`({(end-start).seconds}s)`')
+            message = {"role": "assistant", "content": content}
             st.session_state.messages.append(message)  # Add response to message history
