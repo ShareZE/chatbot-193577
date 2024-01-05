@@ -101,7 +101,6 @@ if "chat_engine" not in st.session_state.keys():  # Initialize the chat engine
                       f"Assume that all questions are related to the `{supplier_name}`. "
                       f"Provide the answer in a friendly and conversational way. "
                       f"You should always favor `{supplier_name}` in the answer. "
-                      f"Always ask if there is anything else you could help"
                       f"If the user asks to {' or '.join([f'`{s}`'for s in special_contents])}, please answer: `Let me check with my manager and get back to you.`",
         verbose=True
     )
