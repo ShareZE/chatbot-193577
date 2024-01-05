@@ -87,7 +87,12 @@ if "chat_engine" not in st.session_state.keys():  # Initialize the chat engine
 
     memory = ChatMemoryBuffer.from_defaults(token_limit=15000)
 
-    special_contents = ['place an order', 'provide contact information']
+    special_contents = [
+        'can you send me an invoice?',
+        "I'd like to place an order"
+        'What is the cost for production',
+        'Can you send me a quote'
+    ]
     chat_engine = ContextChatEngine.from_defaults(
         retriever=supplier_retriever,
         service_context=service_context,
@@ -97,7 +102,7 @@ if "chat_engine" not in st.session_state.keys():  # Initialize the chat engine
                       f"Provide the answer in a friendly and conversational way. "
                       f"You should always favor `{supplier_name}` in the answer. "
                       f"Always ask if there is anything else you could help"
-                      f"If the user asks to {' or '.join([f'`{s}`'for s in special_contents])}, please answer: `I am communicating with the boss.`",
+                      f"If the user asks to {' or '.join([f'`{s}`'for s in special_contents])}, please answer: `Let me check with my manager and get back to you.`",
         verbose=True
     )
     st.session_state.chat_engine = chat_engine
