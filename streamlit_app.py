@@ -121,7 +121,6 @@ if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             start = datetime.datetime.now()
-            response = st.session_state.chat_engine.chat(prompt)
             try:
                 response = st.session_state.chat_engine.chat(prompt)
                 content = response.response
