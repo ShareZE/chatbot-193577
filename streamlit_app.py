@@ -35,18 +35,21 @@ if "messages" not in st.session_state.keys():  # Initialize the chat messages hi
 @st.cache_resource(show_spinner=False)
 def load_data():
     with st.spinner(text=f"`{supplier_name}` Assistant Getting Online – hang tight!"):
-        supplier_info_dir = os.path.dirname(os.path.abspath(__file__)) + f'/storage/supplier_info_{supplier_id}_index_json'
+        supplier_info_dir = os.path.dirname(os.path.abspath(__file__)) + f'/storage/supplier_info_index_json'
         supplier_info_retriever = load_index_from_storage(
             storage_context=StorageContext.from_defaults(persist_dir=supplier_info_dir),
         ).as_retriever(similarity_top_k=1)
-        supplier_item_dir = os.path.dirname(os.path.abspath(__file__)) + f'/storage/supplier_item_{supplier_id}_index_json'
+
+        supplier_item_dir = os.path.dirname(os.path.abspath(__file__)) + f'/storage/supplier_item_index_json'
         supplier_item_retriever = load_index_from_storage(
             storage_context=StorageContext.from_defaults(persist_dir=supplier_item_dir),
         ).as_retriever(similarity_top_k=5)
-        # supplier_chat_dir = os.path.dirname(os.path.abspath(__file__)) + '/storage/supplier_chat_16625_index_json'
-        # supplier_chat_retriever = load_index_from_storage(
-        #     storage_context=StorageContext.from_defaults(persist_dir=supplier_chat_dir),
-        # ).as_retriever(similarity_top_k=3)
+
+        supplier_qa_dir = os.path.dirname(os.path.abspath(__file__)) + '/storage/supplier_qa_index_json'
+        qa_index = load_index_from_storage(
+            storage_context=StorageContext.from_defaults(persist_dir=supplier_qa_dir),
+        )
+        supplier_qa_retriever = qa_index.as_retriever(similarity_top_k=1)
 
         supplier_info_tool = RetrieverTool.from_defaults(
             retriever=supplier_info_retriever,
@@ -56,10 +59,11 @@ def load_data():
             retriever=supplier_item_retriever,
             description="Useful to know the products. The product has name, category, variations, description.",
         )
-        # supplier_chat_tool = RetrieverTool.from_defaults(
-        #     retriever=supplier_chat_retriever,
-        #     description="Useful if you don’t want to know information, but just want to communicate with me",
-        # )
+        qs = ', '.join([f'`{d.metadata["question"]}`' for d in qa_index.docstore.docs.values()])
+        supplier_qa_tool = RetrieverTool.from_defaults(
+            retriever=supplier_qa_retriever,
+            description=f"Useful to answer some specific questions, such as {qs}, so use this tool first.",
+        )
         # define retriever
         llm = OpenAI(model=ai_model)
         retriever = RouterRetriever(
@@ -67,7 +71,7 @@ def load_data():
             retriever_tools=[
                 supplier_info_tool,
                 supplier_item_tool,
-                # supplier_chat_tool
+                supplier_qa_tool
             ],
         )
 
@@ -87,12 +91,6 @@ if "chat_engine" not in st.session_state.keys():  # Initialize the chat engine
 
     memory = ChatMemoryBuffer.from_defaults(token_limit=15000)
 
-    special_contents = [
-        'can you send me an invoice?',
-        "I'd like to place an order"
-        'What is the cost for production',
-        'Can you send me a quote'
-    ]
     chat_engine = ContextChatEngine.from_defaults(
         retriever=supplier_retriever,
         service_context=service_context,
@@ -100,8 +98,7 @@ if "chat_engine" not in st.session_state.keys():  # Initialize the chat engine
         system_prompt=f"You are an expert on the `{supplier_name}` and your job is to answer questions. "
                       f"Assume that all questions are related to the `{supplier_name}`. "
                       f"Provide the answer in a friendly and conversational way. "
-                      f"You should always favor `{supplier_name}` in the answer. "
-                      f"If the user asks to {' or '.join([f'`{s}`'for s in special_contents])}, please answer: `Let me check with my manager and get back to you.`",
+                      f"You should always favor `{supplier_name}` in the answer. ",
         verbose=True
     )
     st.session_state.chat_engine = chat_engine
@@ -124,6 +121,10 @@ if st.session_state.messages[-1]["role"] != "assistant":
             try:
                 response = st.session_state.chat_engine.chat(prompt)
                 content = response.response
+                if len(response.source_nodes) == 1:
+                    metadata = response.source_nodes[0].metadata
+                    if (metadata.get('from') or '') == 'qa':
+                        content = metadata['answer']
             except Exception as e:
                 pass
                 content = 'Can you give me more information?'
