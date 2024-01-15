@@ -123,7 +123,8 @@ if st.session_state.messages[-1]["role"] != "assistant":
                 content = response.response
                 if len(response.source_nodes) == 1:
                     metadata = response.source_nodes[0].metadata
-                    if (metadata.get('from') or '') == 'qa':
+                    score = response.source_nodes[0].score
+                    if (metadata.get('from') or '') == 'qa' and score > 0.85:
                         content = metadata['answer']
             except Exception as e:
                 pass
