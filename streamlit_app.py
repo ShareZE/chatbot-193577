@@ -15,15 +15,44 @@ from llama_index.tools import RetrieverTool
 ai_model = 'gpt-4-1106-preview'
 supplier_name = 'Tao'
 supplier_id = 193577
+bio = '''
+We Are A Professional Apparel Manufacturer Based In Zhejiang, China. We Can Make All Kinds Of Custom Hoodies, Crewnecks, And Clothing. 
+1 . We Have 25 Years Experience On Women Clothing, Our Team Is Professional And Experienced.
+2 . We're Real Manufacturer Who Have Two 100% Own Factories, We Do Factory Certificates Every Year.
+3 . We Use Lots Of International And Imported Machines For Production, We Have Around 500 Workers With Powerful Production Ability, 50000-100000 Pieces Output Monthly. 
+4 . We Supplied And Cooperated With My High-End Brands Like Guess, Alexander Wang, Etc, We're Famous For Quality And Service.
+ Please Feel Free To Contact Us!
+'''
+
+load_dotenv()
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+
+def rephrase_content(text):
+    client = openai.OpenAI(api_key=openai.api_key)
+    response = client.chat.completions.create(
+        model=ai_model,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a synonym conversion tool.",
+            },
+            {
+                "role": "user",
+                "content": f'Rephrase but keep the same meaning using this answer: \n\n '
+                           f'{text}'
+            }
+        ],
+        max_tokens=512
+    )
+    return response.choices[0].message.content
+
 
 st.set_page_config(page_title=f"Chat with the `{supplier_name}` Assistant, powered by LlamaIndex",
                    page_icon="🦙",
                    layout="centered",
                    initial_sidebar_state="auto",
                    menu_items=None)
-
-load_dotenv()
-openai.api_key = st.secrets["OPENAI_API_KEY"]
 st.title(f"Chat with the `{supplier_name}` Assistant")
 
 if "messages" not in st.session_state.keys():  # Initialize the chat messages history
@@ -95,10 +124,12 @@ if "chat_engine" not in st.session_state.keys():  # Initialize the chat engine
         retriever=supplier_retriever,
         service_context=service_context,
         memory=memory,
-        system_prompt=f"You are an expert on the `{supplier_name}` and your job is to answer questions. "
+        system_prompt=f"You are an expert on the manufacturer called `{supplier_name}`, `{supplier_name}` is `{bio}` and your job is to answer questions. "
                       f"Assume that all questions are related to the `{supplier_name}`. "
                       f"Provide the answer in a friendly and conversational way. "
-                      f"You should always favor `{supplier_name}` in the answer. ",
+                      f"You should always favor `{supplier_name}` in the answer. "
+                      f"Please keep the answer concise."
+                      f"NEVER mention that you're an AI.",
         verbose=True
     )
     st.session_state.chat_engine = chat_engine
@@ -125,7 +156,12 @@ if st.session_state.messages[-1]["role"] != "assistant":
                     metadata = response.source_nodes[0].metadata
                     score = response.source_nodes[0].score
                     if (metadata.get('from') or '') == 'qa' and score > 0.85:
-                        content = metadata['answer']
+                        answer = metadata['answer']
+                        last_10_messages = [m['content'] for m in st.session_state.messages if m['role'] == 'assistant'][-10:]
+                        if answer not in last_10_messages:
+                            content = answer
+                        else:
+                            content = rephrase_content(answer)
             except Exception as e:
                 pass
                 content = 'Can you give me more information?'
